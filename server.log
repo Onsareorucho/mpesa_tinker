@@ -1,0 +1,4 @@
+2025-06-04T16:54:42+03:00 Method: POST, Path: /stkpush, Body: {
+    "phone": "254705573204",
+    "amount": "1"
+}, Status: 200, Duration: 1.4077125s

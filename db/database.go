@@ -63,14 +63,20 @@ func CreateDatabaseAndTables() {
 
 	// Create the `stk_requests` table
 	createTable := `
-	CREATE TABLE IF NOT EXISTS stk_requests (
-		id INT AUTO_INCREMENT PRIMARY KEY,
-		phone VARCHAR(20) NOT NULL,
-		amount VARCHAR(10) NOT NULL,
-		status VARCHAR(50) DEFAULT 'initiated',
-		checkout_request_id VARCHAR(255),
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);
+CREATE TABLE IF NOT EXISTS stk_requests (
+	id INT AUTO_INCREMENT PRIMARY KEY,
+	phone VARCHAR(20) NOT NULL,
+	amount VARCHAR(10) NOT NULL,
+	status VARCHAR(50) DEFAULT 'initiated',
+	checkout_request_id VARCHAR(255),
+	mpesa_receipt_number VARCHAR(100),
+	transaction_date BIGINT,
+	callback_amount VARCHAR(10),
+	result_code INT,
+	result_desc TEXT,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 	`
 	_, err = DB.Exec(createTable)
 	if err != nil {

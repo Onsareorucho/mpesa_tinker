@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -43,7 +44,7 @@ func InitiateSTKPush(token, phone, amount string) (*STKResponse, error) {
 		"PartyA":            phoneInt,
 		"PartyB":            174379,
 		"PhoneNumber":       phoneInt,
-		"CallBackURL":       "https://mydomain.com/path",
+		"CallBackURL":       os.Getenv("MPESA_CALLBACK_URL"),
 		"AccountReference":  "CompanyXLTD",
 		"TransactionDesc":   "Payment of X",
 	}
@@ -52,7 +53,7 @@ func InitiateSTKPush(token, phone, amount string) (*STKResponse, error) {
 	req, _ := http.NewRequest("POST", "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest", bytes.NewBuffer(body))
 	req.Header.Add("Authorization", "Bearer "+token)
 	req.Header.Add("Content-Type", "application/json")
-
+	log.Println("Callback URL:", os.Getenv("MPESA_CALLBACK_URL"))
 	client := &http.Client{}
 	// return client.Do(req)
 

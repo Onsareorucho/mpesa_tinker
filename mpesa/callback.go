@@ -3,6 +3,7 @@ package mpesa
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -37,6 +38,10 @@ func CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
+	log.Println("📥 Callback received")
+
+	body, _ := io.ReadAll(r.Body)
+	log.Println("📦 Raw Callback JSON:", string(body))
 
 	data := callback.Body.StkCallback
 
@@ -111,4 +116,21 @@ func statusFromCode(code int) string {
 		return "success"
 	}
 	return "failed"
+}
+
+func StatusHandler(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id") // checkout_request_id
+	if id == "" {
+		http.Error(w, "Missing id", http.StatusBadRequest)
+		return
+	}
+
+	var status string
+	err := db.DB.QueryRow("SELECT status FROM stk_requests WHERE checkout_request_id = ?", id).Scan(&status)
+	if err != nil {
+		http.Error(w, "Not found or DB error", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"status": status})
 }

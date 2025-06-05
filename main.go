@@ -89,6 +89,7 @@ func main() {
 
 	http.Handle("/stkpush", http.HandlerFunc(stkPushHandler))
 	http.HandleFunc("/callback", mpesa.CallbackHandler)
+	http.HandleFunc("/transaction-status", mpesa.StatusHandler)
 
 	fmt.Printf("🚀 Server running at http://localhost:%s\n", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))

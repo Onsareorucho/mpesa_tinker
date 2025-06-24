@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -17,6 +19,92 @@ type STKResponse struct {
 	MerchantRequestID   string `json:"MerchantRequestID"`
 	CheckoutRequestID   string `json:"CheckoutRequestID"`
 	ResponseDescription string `json:"ResponseDescription"`
+}
+
+type RegisterUrlRequest struct {
+	ResponseType    string `json:"ResponseType"`
+	ConfirmationURL string `json:"ConfirmationURL"`
+	ValidationURL   string `json:"ValidationURL"`
+}
+
+type RegisterUrlResponse struct {
+	OriginatorCoversationID string `json:"OriginatorCoversationID"`
+	ResponseCode            string `json:"ResponseCode"`
+	ResponseDescription     string `json:"ResponseDescription"`
+}
+
+// {
+//    "ShortCode": "601426",
+//    "ResponseType":"[Cancelled/Completed]",
+//    "ConfirmationURL":"[confirmation URL]",
+//    "ValidationURL":"[validation URL]"
+// }
+
+func RegisterUrlHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req RegisterUrlRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ResponseType == "" ||
+		req.ConfirmationURL == "" || req.ValidationURL == "" {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	tm := &TokenManager{}
+	token, err := tm.GetToken()
+	if err != nil {
+		log.Println("❌ Failed to get token:", err)
+		http.Error(w, "Failed to get token", http.StatusInternalServerError)
+		return
+	}
+
+	RegUrlResp, err := InitiateRegisterUrl(token, req.ResponseType, req.ConfirmationURL, req.ValidationURL)
+	if err != nil {
+		log.Println("❌ Register URL error:", err)
+		http.Error(w, "Failed to register the URL", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(RegUrlResp)
+}
+
+func InitiateRegisterUrl(token, responseType, confirmationURL, validationURL string) (*RegisterUrlResponse, error) {
+	payload := map[string]string{
+		"ShortCode":       os.Getenv("MPESA_SHORTCODE"),
+		"ResponseType":    responseType,
+		"ConfirmationURL": confirmationURL,
+		"ValidationURL":   validationURL,
+	}
+
+	body, _ := json.Marshal(payload)
+	req, _ := http.NewRequest("POST", "https://sandbox.safaricom.co.ke/mpesa/c2b/v1/registerurl", bytes.NewBuffer(body))
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %v", err)
+	}
+	log.Println("📦 Daraja Register URL response:", string(respBody))
+
+	var registerResp RegisterUrlResponse
+	err = json.NewDecoder(resp.Body).Decode(&registerResp)
+	if err != nil {
+		return nil, err
+	}
+
+	return &registerResp, nil
 }
 
 func InitiateSTKPush(token, phone, amount string) (*STKResponse, error) {
@@ -45,7 +133,7 @@ func InitiateSTKPush(token, phone, amount string) (*STKResponse, error) {
 		"PartyB":            174379,
 		"PhoneNumber":       phoneInt,
 		"CallBackURL":       os.Getenv("MPESA_CALLBACK_URL"),
-		"AccountReference":  "CompanyXLTD",
+		"AccountReference":  "CompanyXLTDX",
 		"TransactionDesc":   "Payment of X",
 	}
 

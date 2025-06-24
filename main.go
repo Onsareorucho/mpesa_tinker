@@ -87,9 +87,11 @@ func main() {
 		port = "8080"
 	}
 
+	http.Handle("/registerurl", http.HandlerFunc(mpesa.RegisterUrlHandler))
 	http.Handle("/stkpush", http.HandlerFunc(stkPushHandler))
 	http.HandleFunc("/callback", mpesa.CallbackHandler)
 	http.HandleFunc("/transaction-status", mpesa.StatusHandler)
+	http.HandleFunc("/qrcode", mpesa.QRCodeImageHandler)
 
 	fmt.Printf("🚀 Server running at http://localhost:%s\n", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))

@@ -33,15 +33,20 @@ type CallbackRequest struct {
 
 // HandleCallback processes the callback from M-Pesa
 func CallbackHandler(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	log.Println("📦 Raw Callback JSON:", string(body))
+
 	var callback CallbackRequest
-	if err := json.NewDecoder(r.Body).Decode(&callback); err != nil {
+	if err := json.Unmarshal(body, &callback); err != nil {
+		log.Println("❌ Failed to parse JSON:", err)
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	log.Println("📥 Callback received")
-
-	body, _ := io.ReadAll(r.Body)
-	log.Println("📦 Raw Callback JSON:", string(body))
 
 	data := callback.Body.StkCallback
 
@@ -55,7 +60,7 @@ func CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	dateInt, _ := strconv.ParseInt(transactionDate, 10, 64)
 
 	// Update DB
-	_, err := db.DB.Exec(`
+	_, err = db.DB.Exec(`
 		UPDATE stk_requests
 		SET status = ?, 
 		    mpesa_receipt_number = ?, 
@@ -84,18 +89,9 @@ func CallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	log.Println("✅ Callback handled successfully")
-}
+	log.Println(receipt, phone, amount, transactionDate, data.ResultCode, data.ResultDesc)
 
-// func extractPhoneNumber(items []MetadataItem) string {
-// 	for _, item := range items {
-// 		if item.Name == "PhoneNumber" {
-// 			if phone, ok := item.Value.(string); ok {
-// 				return phone
-// 			}
-// 		}
-// 	}
-// 	return ""
-// }
+}
 
 func extractMetadataValue(items []MetadataItem, key string) string {
 	for _, item := range items {

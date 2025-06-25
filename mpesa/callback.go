@@ -33,9 +33,13 @@ type CallbackRequest struct {
 
 // HandleCallback processes the callback from M-Pesa
 func CallbackHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		log.Println("❌ Failed to read request body:", err)
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"ResultCode": "0", "ResultDesc": "Success"})
 		return
 	}
 
@@ -44,11 +48,44 @@ func CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	var callback CallbackRequest
 	if err := json.Unmarshal(body, &callback); err != nil {
 		log.Println("❌ Failed to parse JSON:", err)
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"ResultCode": "0", "ResultDesc": "Success"})
 		return
 	}
 
 	data := callback.Body.StkCallback
+	log.Printf("📋 Callback Data - RequestID: %s, ResultCode: %d, ResultDesc: %s",
+		data.CheckoutRequestID, data.ResultCode, data.ResultDesc)
+
+	// Handle failed transactions (when CallbackMetadata is missing)
+	if data.CallbackMetadata.Item == nil || len(data.CallbackMetadata.Item) == 0 {
+		log.Printf("⚠️ Failed transaction - Code: %d, Desc: %s", data.ResultCode, data.ResultDesc)
+
+		// Update DB for failed transaction
+		_, err = db.DB.Exec(`
+				UPDATE stk_requests
+				SET status = ?,
+				    result_code = ?,
+				    result_desc = ?
+				WHERE checkout_request_id = ?
+			`,
+			statusFromCode(data.ResultCode),
+			data.ResultCode,
+			data.ResultDesc,
+			data.CheckoutRequestID,
+		)
+
+		if err != nil {
+			log.Println("❌ Failed to update DB for failed transaction:", err)
+		} else {
+			log.Println("✅ Failed transaction updated in DB")
+		}
+
+		// CRITICAL: Always respond with success to Safaricom
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"ResultCode": "0", "ResultDesc": "Success"})
+		return
+	}
 
 	// Extract useful fields
 	phone := extractMetadataValue(data.CallbackMetadata.Item, "PhoneNumber")
@@ -59,15 +96,17 @@ func CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// Convert if necessary
 	dateInt, _ := strconv.ParseInt(transactionDate, 10, 64)
 
+	log.Printf("✅ Successful transaction - Receipt: %s, Phone: %s, Amount: %s", receipt, phone, amount)
+
 	// Update DB
 	_, err = db.DB.Exec(`
 		UPDATE stk_requests
-		SET status = ?, 
-		    mpesa_receipt_number = ?, 
+		SET status = ?,
+		    mpesa_receipt_number = ?,
 			callback_phone = ?,
-		    callback_amount = ?, 
-		    transaction_date = ?, 
-		    result_code = ?, 
+		    callback_amount = ?,
+		    transaction_date = ?,
+		    result_code = ?,
 		    result_desc = ?
 		WHERE checkout_request_id = ?
 	`,
@@ -83,12 +122,15 @@ func CallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Println("❌ Failed to update DB:", err)
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		return
+	} else {
+		log.Println("✅ Successful transaction updated in DB")
 	}
 
 	w.WriteHeader(http.StatusOK)
-	log.Println("✅ Callback handled successfully")
+
+	json.NewEncoder(w).Encode(map[string]string{"ResultCode": "0", "ResultDesc": "Success"})
+
+	log.Printf("🎉 Callback processed successfully for CheckoutRequestID: %s", data.CheckoutRequestID)
 	log.Println(receipt, phone, amount, transactionDate, data.ResultCode, data.ResultDesc)
 
 }
@@ -100,7 +142,9 @@ func extractMetadataValue(items []MetadataItem, key string) string {
 			case string:
 				return v
 			case float64:
-				return fmt.Sprintf("%.0f", v) // for Amount, TransactionDate
+				return fmt.Sprintf("%.0f", v)
+			case int:
+				return fmt.Sprintf("%d", v)
 			}
 		}
 	}

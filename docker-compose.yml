@@ -11,12 +11,24 @@ services:
       MYSQL_USER: mpesa
       MYSQL_PASSWORD: password
     ports:
-      - '3305:3306'
+      - '3307:3306'
     volumes:
       - mysql_data:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - mpesa_network
+  mpesatinker: 
+   image: mpesatinker:latest
+   entrypoint: ["sh", "-c", "sleep 50 && /app/.mpesa"]
+   depends_on:
+     - mysql
+   container_name: mpesa_tinker
+   ports:
+      - '8080:8080'
+   volumes:
+     - ./.env:/app/.env
+   networks:
+    - mpesa_network
 
 volumes:
   mysql_data:

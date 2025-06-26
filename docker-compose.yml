@@ -19,14 +19,14 @@ services:
       - mpesa_network
   mpesatinker: 
    image: mpesatinker:latest
-   entrypoint: ["sh", "-c", "sleep 50 && /app/.mpesa"]
+   entrypoint: ["sh", "-c", "sleep 50 && /app/mpesa"]
    depends_on:
      - mysql
    container_name: mpesa_tinker
    ports:
       - '8080:8080'
    volumes:
-     - ./.env:/app/.env
+     - ./.env.docker:/app/.env
    networks:
     - mpesa_network
 

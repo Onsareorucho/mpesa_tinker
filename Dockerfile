@@ -1,6 +1,6 @@
 FROM alpine
 
 WORKDIR /app
-COPY  goRestAPI ./mpesa
-RUN chmod +x ./mpesa
+COPY  goRestAPI /app/mpesa
+RUN chmod +x /app/mpesa
 CMD [ "./mpesa" ]

@@ -92,6 +92,7 @@ func main() {
 	http.HandleFunc("/callback", mpesa.CallbackHandler)
 	http.HandleFunc("/transaction-status", mpesa.StatusHandler)
 	http.HandleFunc("/qrcode", mpesa.QRCodeImageHandler)
+	http.HandleFunc("/b2c", mpesa.BusinessToCustomerHandler)
 
 	fmt.Printf("🚀 Server running at http://localhost:%s\n", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))

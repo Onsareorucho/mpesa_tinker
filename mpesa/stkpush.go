@@ -73,39 +73,36 @@ func RegisterUrlHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func InitiateRegisterUrl(token, responseType, confirmationURL, validationURL string) (*RegisterUrlResponse, error) {
-	payload := map[string]string{
-		"ShortCode":       os.Getenv("MPESA_SHORTCODE"),
-		"ResponseType":    responseType,
-		"ConfirmationURL": confirmationURL,
-		"ValidationURL":   validationURL,
-	}
+    payload := map[string]string{}
 
-	body, _ := json.Marshal(payload)
-	req, _ := http.NewRequest("POST", "https://sandbox.safaricom.co.ke/mpesa/c2b/v1/registerurl", bytes.NewBuffer(body))
-	req.Header.Add("Authorization", "Bearer "+token)
-	req.Header.Add("Content-Type", "application/json")
+    body, _ := json.Marshal(payload)
+    req, _ := http.NewRequest("POST",
+        "https://sandbox.safaricom.co.ke/mpesa/c2b/v1/registerurl",
+        bytes.NewBuffer(body))
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+    req.Header.Set("Authorization", "Bearer "+token)
+    req.Header.Set("Content-Type", "application/json")
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
-	}
-	log.Println("📦 Daraja Register URL response:", string(respBody))
+    resp, err := http.DefaultClient.Do(req)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
 
-	var registerResp RegisterUrlResponse
-	err = json.NewDecoder(resp.Body).Decode(&registerResp)
-	if err != nil {
-		return nil, err
-	}
+    respBody, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return nil, fmt.Errorf("read response: %v", err)
+    }
+    log.Println("📦 Daraja Register URL response:", string(respBody))
 
-	return &registerResp, nil
+    var registerResp RegisterUrlResponse
+    if err := json.Unmarshal(respBody, &registerResp); err != nil {
+        return nil, fmt.Errorf("decode response: %v", err)
+    }
+
+    return &registerResp, nil
 }
+
 
 func InitiateSTKPush(token, phone, amount string) (*STKResponse, error) {
 	timestamp := time.Now().Format("20060102150405")
@@ -133,7 +130,7 @@ func InitiateSTKPush(token, phone, amount string) (*STKResponse, error) {
 		"PartyB":            174379,
 		"PhoneNumber":       phoneInt,
 		"CallBackURL":       os.Getenv("MPESA_CALLBACK_URL"),
-		"AccountReference":  "CompanyXLTDX",
+		"AccountReference":  "YOURFAVORITEDEVELOPER",
 		"TransactionDesc":   "Payment of X",
 	}
 

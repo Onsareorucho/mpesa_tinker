@@ -74,6 +74,7 @@ func BusinessToCustomerHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println("❌ B2C error:", err)
 		http.Error(w, "Failed to make the B2C transaction", http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -83,6 +84,7 @@ func BusinessToCustomerHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func InitiateB2C(token string, req BusinessToCustomerRequest) (*BusinessToCustomerResponse, error) {
+	// 1. marshal the request payload
 	payload := map[string]interface{}{
 		"OriginatorConversationID": req.OriginatorConversationID,
 		"InitiatorName":            req.InitiatorName,
@@ -96,29 +98,49 @@ func InitiateB2C(token string, req BusinessToCustomerRequest) (*BusinessToCustom
 		"ResultURL":                req.ResultURL,
 		"Occassion":                req.Occassion,
 	}
-	body, _ := json.Marshal(payload)
-	httpReq, _ := http.NewRequest("POST", "https://sandbox.safaricom.co.ke/mpesa/b2c/v3/paymentrequest", bytes.NewBuffer(body))
-	httpReq.Header.Add("Authorization", "Bearer "+token)
-	httpReq.Header.Add("Content-Type", "application/json")
-	
-	client := &http.Client{}
-	resp, err := client.Do(httpReq)
+
+	jsonBody, err := json.Marshal(payload)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("marshal payload: %w", err)
+	}
+
+	// 2. build the HTTP request
+	httpReq, err := http.NewRequest(
+		http.MethodPost,
+		"https://sandbox.safaricom.co.ke/mpesa/b2c/v3/paymentrequest",
+		bytes.NewBuffer(jsonBody),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	// 3. perform the call
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("do request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	// 4. read the body once
+	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
+		return nil, fmt.Errorf("read response: %w", err)
 	}
-	log.Println("📦 Daraja Register URL response:", string(respBody))
+	log.Println("📦 Daraja B2C response:", string(respBytes))
 
-	 var b2cResp BusinessToCustomerResponse
-	 err = json.NewDecoder(resp.Body).Decode(&b2cResp)
-	if err != nil {
-		return nil, err
+	// 5. optional: check non-200 status codes early
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("daraja returned %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	// 6. unmarshal from the bytes we already read
+	var b2cResp BusinessToCustomerResponse
+	if err := json.Unmarshal(respBytes, &b2cResp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
 	return &b2cResp, nil
 }
+

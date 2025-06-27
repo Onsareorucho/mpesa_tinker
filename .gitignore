@@ -1,2 +1,5 @@
 .env
 ngrok.exe
+.env.docker
+goRestAPI
+goRESTAPI.exe
